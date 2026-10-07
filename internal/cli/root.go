@@ -28,6 +28,7 @@ func NewRootCmd() *cobra.Command {
 		newShowCmd(),
 		newUndoCmd(),
 		newEvidenceCmd(),
+		newConcludeCmd(),
 	)
 	return root
 }

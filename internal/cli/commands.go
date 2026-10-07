@@ -226,6 +226,10 @@ func newUndoCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// --force は CLI を経由しない変更まで消せるので、deny 設定に加えて CLI でも AI には使わせない。
+			if force && research.IsAI(actor) {
+				return fmt.Errorf("--force can only be used by a human (actor is %s)", actor)
+			}
 			subject, err := gitutil.Undo(s.repo.Root, actor, force)
 			if err != nil {
 				return err

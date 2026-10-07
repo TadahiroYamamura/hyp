@@ -101,7 +101,7 @@ my-research/              # git リポジトリ
 
 | 段階 | 方法 |
 |---|---|
-| 指示 | 研究ディレクトリの CLAUDE.md に `hyp` 経由で操作するよう書く |
+| 指示 | `hyp prime` の出力で `hyp` 経由で操作するよう指示する |
 | 権限 | Claude Code の settings で `hypotheses/` `evidence/` への Edit/Write と `hyp evidence approve` を deny |
 | 検知 | `hyp check`（スキーマ違反・ハッシュ不一致・未コミット変更） |
 
@@ -122,6 +122,12 @@ Bash 経由の書き込みは権限設定では防げない。承認の偽造を
 | `hyp evidence link <node> <evidence>` | 既存の根拠を紐づけ |
 | `hyp evidence approve <evidence>` | 承認（人間のみ） |
 | `hyp check` | 整合性検査 |
+| `hyp prime` | AI エージェント向けの使い方を出力する |
+| `hyp setup claude` | Claude Code の SessionStart フックに `hyp prime` を登録し、deny 設定と `HYP_ACTOR` を入れる |
+
+- エージェント向けの使い方は、研究ディレクトリのファイルに書き込まず `hyp prime` が出力する。CLI の更新と使い方の説明がずれないため（Beads と同じ方式）
+- `hyp prime` は研究の現在の状態を出力しない。状態はセッション中に変わるため、必要なときに `show` / `check` で取得させる
+- `hyp init` はエージェントの設定に触れず、`hyp setup claude` を明示的に実行したときだけ入れる。権限設定まで変更するため、`init` のついでに行われると気づきにくい
 
 出力は英語。ID 引数は Cobra の動的補完で Tab 補完できるようにする。
 `show` と `conclude` は `--json` を持つ。AI がツリーを読むとき、人間向けの表示を解析させないため。

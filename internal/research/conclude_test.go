@@ -53,8 +53,8 @@ func inner(id, parent string, c Combine) *Node {
 
 func pendingIDs(r *Result) string {
 	ids := make([]string, len(r.Pending))
-	for i, n := range r.Pending {
-		ids[i] = n.ID
+	for i, p := range r.Pending {
+		ids[i] = p.Node.ID
 	}
 	return strings.Join(ids, ",")
 }

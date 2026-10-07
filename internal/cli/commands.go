@@ -96,6 +96,7 @@ func newSetCmd() *cobra.Command {
 			for name, dst := range map[string]**string{
 				"title": &e.Title, "description": &e.Description, "method": &e.Method,
 				"status": &e.Status, "combine": &e.Combine, "condition": &e.Condition,
+				"axis": &e.Axis, "weight": &e.Weight,
 			} {
 				if flags.Changed(name) {
 					v, _ := flags.GetString(name)
@@ -122,6 +123,8 @@ func newSetCmd() *cobra.Command {
 	f.String("status", "", "status of a leaf hypothesis")
 	f.String("combine", "", "how children make up this hypothesis (empty to unset)")
 	f.String("condition", "", "condition of this case (parent's combine must be cases)")
+	f.String("axis", "", "the single criterion by which the children are split (empty to unset)")
+	f.String("weight", "", "impact on the parent relative to the siblings; normalized among siblings (empty to unset)")
 	_ = cmd.RegisterFlagCompletionFunc("status", fixedCompletion(research.Statuses))
 	_ = cmd.RegisterFlagCompletionFunc("combine", fixedCompletion(research.Combines))
 	return cmd

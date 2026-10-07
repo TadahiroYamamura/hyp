@@ -68,7 +68,9 @@ type Edit struct {
 	Method      *string
 	Status      *string
 	Combine     *string
+	Axis        *string
 	Condition   *string
+	Weight      *string
 }
 
 func ApplyEdit(t *Tree, n *Node, e Edit) error {
@@ -103,6 +105,22 @@ func ApplyEdit(t *Tree, n *Node, e Edit) error {
 			return fmt.Errorf("combine can only be set on hypotheses with children: %s has none", n.ID)
 		}
 		n.Combine = c
+	}
+	if e.Axis != nil {
+		if *e.Axis != "" && !t.HasChildren(n.ID) {
+			return fmt.Errorf("axis can only be set on hypotheses with children: %s has none", n.ID)
+		}
+		n.Axis = *e.Axis
+	}
+	if e.Weight != nil {
+		w, err := ParseWeight(*e.Weight)
+		if err != nil {
+			return err
+		}
+		if w != nil && n.Parent == "" {
+			return fmt.Errorf("weight can only be set on hypotheses with a parent: %s is a root", n.ID)
+		}
+		n.Weight = w
 	}
 	if e.Condition != nil {
 		if *e.Condition != "" {

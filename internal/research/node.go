@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -60,6 +62,8 @@ type Node struct {
 	Method      string         `yaml:"method,omitempty" json:"method,omitempty"`
 	Status      Status         `yaml:"status,omitempty" json:"status,omitempty"`
 	Combine     Combine        `yaml:"combine,omitempty" json:"combine,omitempty"`
+	Axis        string         `yaml:"axis,omitempty" json:"axis,omitempty"`
+	Weight      *float64       `yaml:"weight,omitempty" json:"weight,omitempty"`
 	Condition   string         `yaml:"condition,omitempty" json:"condition,omitempty"`
 	Evidence    []EvidenceLink `yaml:"evidence,omitempty" json:"evidence,omitempty"`
 	CreatedAt   time.Time      `yaml:"created_at" json:"created_at"`
@@ -109,4 +113,16 @@ func joinStrings[T ~string](vs []T) string {
 		ss[i] = string(v)
 	}
 	return strings.Join(ss, ", ")
+}
+
+// ParseWeight は空文字列を「重みを外す」指定として nil を返す。
+func ParseWeight(s string) (*float64, error) {
+	if s == "" {
+		return nil, nil
+	}
+	w, err := strconv.ParseFloat(s, 64)
+	if err != nil || !(w > 0) || math.IsInf(w, 0) {
+		return nil, fmt.Errorf("invalid weight %q (want a positive number)", s)
+	}
+	return &w, nil
 }

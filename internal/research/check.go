@@ -2,6 +2,7 @@ package research
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -96,6 +97,28 @@ func checkNode(r *Repo, t *Tree, n *Node, evByID map[string]*Evidence) []Issue {
 		add(SeverityWarning, "case has no condition")
 	} else if n.Condition != "" && (!ok || p.Combine != CombineCases) {
 		add(SeverityWarning, "condition is ignored because the parent's combine is not cases")
+	}
+	if n.Weight != nil {
+		if !(*n.Weight > 0) || math.IsInf(*n.Weight, 0) {
+			add(SeverityError, "weight must be a positive number")
+		}
+		if n.Parent == "" {
+			add(SeverityWarning, "weight is ignored on a root")
+		}
+	}
+	if n.Axis != "" && !t.HasChildren(n.ID) {
+		add(SeverityWarning, "axis is set on a hypothesis without children")
+	}
+	if cs := t.Children(n.ID); len(cs) > 0 {
+		set := 0
+		for _, c := range cs {
+			if c.Weight != nil {
+				set++
+			}
+		}
+		if set > 0 && set < len(cs) {
+			add(SeverityWarning, "only %d of %d children have a weight; the others are treated as the average", set, len(cs))
+		}
 	}
 	seen := map[string]bool{}
 	for _, l := range n.Evidence {

@@ -84,3 +84,40 @@ func (t *Tree) IsDescendant(id, ancestor string) bool {
 	}
 	return false
 }
+
+// Share は親にとっての重みを、兄弟の合計が 1 になるよう正規化して返す。
+// 合計を保つ調整を人や AI にさせると、子を足すたびに兄弟全員を書き換えることになるため、読むときに正規化する。
+// 重みのない兄弟は、重みのある兄弟の平均として扱う（全員がなければ均等になる）。
+func (t *Tree) Share(id string) float64 {
+	n, ok := t.byID[id]
+	if !ok {
+		return 0
+	}
+	siblings := t.roots
+	if _, ok := t.byID[n.Parent]; ok {
+		siblings = t.children[n.Parent]
+	}
+	var sum float64
+	set := 0
+	for _, s := range siblings {
+		if s.Weight != nil {
+			sum += *s.Weight
+			set++
+		}
+	}
+	mean := 1.0
+	if set > 0 {
+		mean = sum / float64(set)
+	}
+	weight := func(s *Node) float64 {
+		if s.Weight != nil {
+			return *s.Weight
+		}
+		return mean
+	}
+	var total float64
+	for _, s := range siblings {
+		total += weight(s)
+	}
+	return weight(n) / total
+}

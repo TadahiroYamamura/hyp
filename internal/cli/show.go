@@ -94,7 +94,13 @@ func describe(t *research.Tree, n *research.Node) string {
 			tag = "combine unset"
 		}
 	}
+	if n.Axis != "" {
+		tag += " by " + n.Axis
+	}
 	s := fmt.Sprintf("%s  %s  [%s] %s", t.Label(n.ID), n.ID, tag, n.Title)
+	if n.Parent != "" {
+		s += fmt.Sprintf("  (weight %s)", percent(t.Share(n.ID)))
+	}
 	if n.Condition != "" {
 		s += fmt.Sprintf("  (if: %s)", n.Condition)
 	}

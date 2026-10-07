@@ -118,6 +118,10 @@ func TestCheck(t *testing.T) {
 			f.save(t)
 		}, SeverityError, "more than once"},
 		{"定義にないstanceはerror", func(t *testing.T, f *checkFixture) { f.c1.Evidence[0].Stance = "support"; f.save(t) }, SeverityError, "invalid stance"},
+		{"正でない重みはerror", func(t *testing.T, f *checkFixture) { neg, pos := -1.0, 1.0; f.c1.Weight, f.c2.Weight = &neg, &pos; f.save(t) }, SeverityError, "weight must be a positive"},
+		{"ルートの重みはwarning", func(t *testing.T, f *checkFixture) { w := 1.0; f.p.Weight = &w; f.save(t) }, SeverityWarning, "ignored on a root"},
+		{"一部の子だけが重みを持つとwarning", func(t *testing.T, f *checkFixture) { w := 1.0; f.c1.Weight = &w; f.save(t) }, SeverityWarning, "only 1 of 2 children"},
+		{"末端の軸はwarning", func(t *testing.T, f *checkFixture) { f.c1.Axis = "x"; f.save(t) }, SeverityWarning, "axis is set"},
 		// 根拠
 		{"どこにも紐づいていない根拠はwarning", func(t *testing.T, f *checkFixture) { f.c1.Evidence = nil; f.save(t) }, SeverityWarning, "not linked"},
 		{"根拠のディレクトリにある記録外のファイルはwarning", func(t *testing.T, f *checkFixture) {

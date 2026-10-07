@@ -31,6 +31,15 @@ and approves evidence.
     conclusion becomes conditional ("supported when ...").
   To express `(A and B) or C`, put an `and` hypothesis holding A and B under an `or` hypothesis.
   If you cannot give that intermediate hypothesis a meaningful title, reconsider the decomposition.
+- A hypothesis with children has an `axis`: the single criterion by which its children are split.
+- Each non-root hypothesis can have a `weight`: its impact on the parent relative to its siblings.
+  Weights are normalized among siblings when read, so they need not sum to 1. Siblings without
+  a weight count as the average. Under `cases`, use the share of the population each case covers.
+- `hyp conclude` reports `progress`: the weighted share of the conclusion already judged. It is
+  NOT the probability that the hypothesis is true: under `and`, one rejected child rejects the
+  parent however small its weight. Under `cases` it also reports the share where the hypothesis
+  is supported or rejected. Pending leaves are sorted by their weight for the hypothesis
+  concluded, and show what the conclusion would be if only that leaf were judged.
 - Evidence is shared: one piece of evidence can be linked to several hypotheses. Each link has
   a `stance`: supports, refutes or inconclusive.
 
@@ -39,7 +48,7 @@ and approves evidence.
     hyp show [id] [--json]                  list roots, or show the tree under a hypothesis
     hyp add [parent] <title>                add a hypothesis (prints its id)
     hyp set <id> [--title ...] [--description ...] [--method ...]
-                 [--status ...] [--combine ...] [--condition ...]
+                 [--status ...] [--combine ...] [--condition ...] [--axis ...] [--weight ...]
     hyp mv <id> (<new-parent> | --root)
     hyp rm <id>                             only hypotheses without children
     hyp conclude <id> [--json]              derived conclusion and the leaves still pending

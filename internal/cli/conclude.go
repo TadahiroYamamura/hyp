@@ -9,10 +9,13 @@ import (
 )
 
 type jsonPending struct {
-	Label  string          `json:"label"`
-	ID     string          `json:"id"`
-	Title  string          `json:"title"`
-	Status research.Status `json:"status"`
+	Label       string              `json:"label"`
+	ID          string              `json:"id"`
+	Title       string              `json:"title"`
+	Status      research.Status     `json:"status"`
+	Weight      float64             `json:"weight"`
+	IfSupported research.Conclusion `json:"if_supported"`
+	IfRejected  research.Conclusion `json:"if_rejected"`
 }
 
 type jsonConclusion struct {
@@ -22,8 +25,12 @@ type jsonConclusion struct {
 	Conclusion    research.Conclusion `json:"conclusion"`
 	SupportedWhen string              `json:"supported_when"`
 	RejectedWhen  string              `json:"rejected_when"`
-	Pending       []jsonPending       `json:"pending"`
-	Warnings      []string            `json:"warnings"`
+	Progress      float64             `json:"progress"`
+	// cases のときだけ出力する。
+	SupportedShare *float64      `json:"supported_share,omitempty"`
+	RejectedShare  *float64      `json:"rejected_share,omitempty"`
+	Pending        []jsonPending `json:"pending"`
+	Warnings       []string      `json:"warnings"`
 }
 
 func newConcludeCmd() *cobra.Command {
@@ -44,17 +51,23 @@ func newConcludeCmd() *cobra.Command {
 			}
 			r := research.Conclude(s.tree, n)
 			j := jsonConclusion{
-				Label:         s.tree.Label(n.ID),
-				ID:            n.ID,
-				Title:         n.Title,
-				Conclusion:    r.Conclusion(),
-				SupportedWhen: r.SupportedWhen.String(),
-				RejectedWhen:  r.RejectedWhen.String(),
-				Pending:       []jsonPending{},
-				Warnings:      append([]string{}, r.Warnings...),
+				Label:          s.tree.Label(n.ID),
+				ID:             n.ID,
+				Title:          n.Title,
+				Conclusion:     r.Conclusion(),
+				SupportedWhen:  r.SupportedWhen.String(),
+				RejectedWhen:   r.RejectedWhen.String(),
+				Progress:       r.Progress,
+				SupportedShare: r.SupportedShare,
+				RejectedShare:  r.RejectedShare,
+				Pending:        []jsonPending{},
+				Warnings:       append([]string{}, r.Warnings...),
 			}
 			for _, p := range r.Pending {
-				j.Pending = append(j.Pending, jsonPending{Label: s.tree.Label(p.ID), ID: p.ID, Title: p.Title, Status: p.Status})
+				j.Pending = append(j.Pending, jsonPending{
+					Label: s.tree.Label(p.Node.ID), ID: p.Node.ID, Title: p.Node.Title, Status: p.Node.Status,
+					Weight: p.Weight, IfSupported: p.IfSupported, IfRejected: p.IfRejected,
+				})
 			}
 			out := cmd.OutOrStdout()
 			if asJSON {
@@ -74,10 +87,15 @@ func newConcludeCmd() *cobra.Command {
 			default:
 				fmt.Fprintf(out, "conclusion: %s\n", j.Conclusion)
 			}
+			fmt.Fprintf(out, "progress: %s judged (not the probability that the hypothesis is true)\n", percent(j.Progress))
+			if j.SupportedShare != nil {
+				fmt.Fprintf(out, "cases: supported in %s, rejected in %s\n", percent(*j.SupportedShare), percent(*j.RejectedShare))
+			}
 			if len(j.Pending) > 0 {
-				fmt.Fprintln(out, "pending:")
+				fmt.Fprintln(out, "pending (by weight; conclusion if only this one is judged):")
 				for _, p := range j.Pending {
-					fmt.Fprintf(out, "  %s  %s  [%s] %s\n", p.Label, p.ID, p.Status, p.Title)
+					fmt.Fprintf(out, "  %s  %s  [%s] %s  weight %s  if supported: %s, if rejected: %s\n",
+						p.Label, p.ID, p.Status, p.Title, percent(p.Weight), p.IfSupported, p.IfRejected)
 				}
 			}
 			if len(j.Warnings) > 0 {
@@ -92,3 +110,5 @@ func newConcludeCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&asJSON, "json", false, "output as JSON")
 	return cmd
 }
+
+func percent(v float64) string { return fmt.Sprintf("%.0f%%", v*100) }

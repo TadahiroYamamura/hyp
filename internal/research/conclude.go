@@ -2,6 +2,7 @@ package research
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -89,11 +90,29 @@ const (
 
 // Result は導出結果。SupportedWhen / RejectedWhen は、それぞれ仮説が支持・棄却される条件。
 // Pending は結論を確定させるために判定が必要な末端、Warnings は導出できなかった箇所。
+//
+// Progress は結論のうち判定済みの割合で、子の重みで加重する。結論が確定した部分木は 1 とする。
+// 仮説が正しい確率ではない（and の下で判定済みが 8 割でも、残りが棄却されれば全体が棄却される）。
+//
+// SupportedShare / RejectedShare は combine が cases のときだけ値を持ち、
+// 支持・棄却された場合が占める割合を、場合の重みで表す。
 type Result struct {
-	SupportedWhen *Formula
-	RejectedWhen  *Formula
-	Pending       []*Node
-	Warnings      []string
+	SupportedWhen  *Formula
+	RejectedWhen   *Formula
+	Pending        []Pending
+	Warnings       []string
+	Progress       float64
+	SupportedShare *float64
+	RejectedShare  *float64
+}
+
+// Pending は未確定の末端。Weight は導出の対象にとっての重み（経路上の正規化した重みの積）。
+// IfSupported / IfRejected は、その末端だけがそう判定されたときの対象の結論。
+type Pending struct {
+	Node        *Node
+	Weight      float64
+	IfSupported Conclusion
+	IfRejected  Conclusion
 }
 
 func (r *Result) Conclusion() Conclusion {
@@ -109,24 +128,41 @@ func (r *Result) Conclusion() Conclusion {
 }
 
 // Conclude は末端の status から、子を持つノードの結論を導く。
+// 未確定の末端は、対象にとっての重みが大きい順に並べ、それぞれが決まったときの結論を添える。
+func Conclude(t *Tree, n *Node) *Result {
+	res := conclude(t, n, nil)
+	for i := range res.Pending {
+		p := &res.Pending[i]
+		p.IfSupported = conclude(t, n, map[string]Status{p.Node.ID: StatusSupported}).Conclusion()
+		p.IfRejected = conclude(t, n, map[string]Status{p.Node.ID: StatusRejected}).Conclusion()
+	}
+	sort.SliceStable(res.Pending, func(i, j int) bool { return res.Pending[i].Weight > res.Pending[j].Weight })
+	return res
+}
+
+// conclude は override に挙げた末端の status を置き換えて導出する。
 // 未確定（untested / testing / on-hold）の末端の扱いは Kleene の三値論理と同じで、
 // and の子に rejected が一つあれば、ほかの子が未確定でも rejected に確定する。
-func Conclude(t *Tree, n *Node) *Result {
+func conclude(t *Tree, n *Node, override map[string]Status) *Result {
 	children := t.Children(n.ID)
 	if len(children) == 0 {
-		switch n.Status {
-		case StatusSupported:
-			return &Result{SupportedWhen: True, RejectedWhen: False}
-		case StatusRejected:
-			return &Result{SupportedWhen: False, RejectedWhen: True}
+		status := n.Status
+		if s, ok := override[n.ID]; ok {
+			status = s
 		}
-		return &Result{SupportedWhen: False, RejectedWhen: False, Pending: []*Node{n}}
+		switch status {
+		case StatusSupported:
+			return &Result{SupportedWhen: True, RejectedWhen: False, Progress: 1}
+		case StatusRejected:
+			return &Result{SupportedWhen: False, RejectedWhen: True, Progress: 1}
+		}
+		return &Result{SupportedWhen: False, RejectedWhen: False, Pending: []Pending{{Node: n, Weight: 1}}}
 	}
 
 	res := &Result{}
 	subs := make([]*Result, len(children))
 	for i, c := range children {
-		subs[i] = Conclude(t, c)
+		subs[i] = conclude(t, c, override)
 		res.Warnings = append(res.Warnings, subs[i].Warnings...)
 		if c.Condition != "" && n.Combine != CombineCases {
 			res.Warnings = append(res.Warnings, fmt.Sprintf("%s %s: condition is ignored because the parent's combine is not cases", t.Label(c.ID), c.ID))
@@ -162,6 +198,16 @@ func Conclude(t *Tree, n *Node) *Result {
 			sup, rej = append(sup, And(k, s.SupportedWhen)), append(rej, And(k, s.RejectedWhen))
 		}
 		res.SupportedWhen, res.RejectedWhen = Or(sup...), Or(rej...)
+		var supShare, rejShare float64
+		for i, c := range children {
+			if subs[i].SupportedWhen.IsTrue() {
+				supShare += t.Share(c.ID)
+			}
+			if subs[i].RejectedWhen.IsTrue() {
+				rejShare += t.Share(c.ID)
+			}
+		}
+		res.SupportedShare, res.RejectedShare = &supShare, &rejShare
 		if allSup {
 			res.SupportedWhen = True
 		}
@@ -174,9 +220,16 @@ func Conclude(t *Tree, n *Node) *Result {
 	}
 
 	// 結論が確定していれば、残りの未確定の末端は結論に影響しないので挙げない。
-	if !res.SupportedWhen.IsTrue() && !res.RejectedWhen.IsTrue() {
-		for _, s := range subs {
-			res.Pending = append(res.Pending, s.Pending...)
+	if res.SupportedWhen.IsTrue() || res.RejectedWhen.IsTrue() {
+		res.Progress = 1
+		return res
+	}
+	for i, c := range children {
+		share := t.Share(c.ID)
+		res.Progress += share * subs[i].Progress
+		for _, p := range subs[i].Pending {
+			p.Weight *= share
+			res.Pending = append(res.Pending, p)
 		}
 	}
 	return res

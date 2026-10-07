@@ -53,15 +53,16 @@ func ParseCombine(s string) (Combine, error) {
 }
 
 type Node struct {
-	ID          string    `yaml:"id" json:"id"`
-	Parent      string    `yaml:"parent,omitempty" json:"parent,omitempty"`
-	Title       string    `yaml:"title" json:"title"`
-	Description string    `yaml:"description,omitempty" json:"description,omitempty"`
-	Method      string    `yaml:"method,omitempty" json:"method,omitempty"`
-	Status      Status    `yaml:"status,omitempty" json:"status,omitempty"`
-	Combine     Combine   `yaml:"combine,omitempty" json:"combine,omitempty"`
-	Condition   string    `yaml:"condition,omitempty" json:"condition,omitempty"`
-	CreatedAt   time.Time `yaml:"created_at" json:"created_at"`
+	ID          string         `yaml:"id" json:"id"`
+	Parent      string         `yaml:"parent,omitempty" json:"parent,omitempty"`
+	Title       string         `yaml:"title" json:"title"`
+	Description string         `yaml:"description,omitempty" json:"description,omitempty"`
+	Method      string         `yaml:"method,omitempty" json:"method,omitempty"`
+	Status      Status         `yaml:"status,omitempty" json:"status,omitempty"`
+	Combine     Combine        `yaml:"combine,omitempty" json:"combine,omitempty"`
+	Condition   string         `yaml:"condition,omitempty" json:"condition,omitempty"`
+	Evidence    []EvidenceLink `yaml:"evidence,omitempty" json:"evidence,omitempty"`
+	CreatedAt   time.Time      `yaml:"created_at" json:"created_at"`
 }
 
 func NewID() (string, error) {
@@ -74,26 +75,31 @@ func NewID() (string, error) {
 
 // Resolve は git と同じく、一意に定まる前方一致で ID を解決する。
 func Resolve(nodes []*Node, prefix string) (*Node, error) {
+	return resolveID(nodes, func(n *Node) string { return n.ID }, prefix, "hypothesis")
+}
+
+func resolveID[T any](items []T, id func(T) string, prefix, kind string) (T, error) {
+	var zero T
 	if prefix == "" {
-		return nil, fmt.Errorf("empty id")
+		return zero, fmt.Errorf("empty id")
 	}
-	var found []*Node
-	for _, n := range nodes {
-		if strings.HasPrefix(n.ID, prefix) {
-			found = append(found, n)
+	var found []T
+	for _, it := range items {
+		if strings.HasPrefix(id(it), prefix) {
+			found = append(found, it)
 		}
 	}
 	switch len(found) {
 	case 0:
-		return nil, fmt.Errorf("no hypothesis matches %q", prefix)
+		return zero, fmt.Errorf("no %s matches %q", kind, prefix)
 	case 1:
 		return found[0], nil
 	default:
 		ids := make([]string, len(found))
-		for i, n := range found {
-			ids[i] = n.ID
+		for i, it := range found {
+			ids[i] = id(it)
 		}
-		return nil, fmt.Errorf("ambiguous id %q: %s", prefix, strings.Join(ids, ", "))
+		return zero, fmt.Errorf("ambiguous id %q: %s", prefix, strings.Join(ids, ", "))
 	}
 }
 

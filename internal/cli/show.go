@@ -22,7 +22,7 @@ func newShowCmd() *cobra.Command {
 		Use:               "show [id]",
 		Short:             "List root hypotheses, or show the tree under a hypothesis",
 		Args:              cobra.MaximumNArgs(1),
-		ValidArgsFunction: completeIDs(1),
+		ValidArgsFunction: completeIDs(nodeID),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openSession()
 			if err != nil {

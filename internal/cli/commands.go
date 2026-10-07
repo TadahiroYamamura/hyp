@@ -44,7 +44,7 @@ func newAddCmd() *cobra.Command {
 		Use:               "add [parent] <title>",
 		Short:             "Add a hypothesis (as a root if parent is omitted)",
 		Args:              cobra.RangeArgs(1, 2),
-		ValidArgsFunction: completeIDs(1),
+		ValidArgsFunction: completeIDs(nodeID),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openSession()
 			if err != nil {
@@ -80,7 +80,7 @@ func newSetCmd() *cobra.Command {
 		Use:               "set <id>",
 		Short:             "Update attributes of a hypothesis",
 		Args:              cobra.ExactArgs(1),
-		ValidArgsFunction: completeIDs(1),
+		ValidArgsFunction: completeIDs(nodeID),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openSession()
 			if err != nil {
@@ -143,7 +143,7 @@ func newMvCmd() *cobra.Command {
 		Use:               "mv <id> (<new-parent> | --root)",
 		Short:             "Move a hypothesis under another hypothesis, or to the root",
 		Args:              cobra.RangeArgs(1, 2),
-		ValidArgsFunction: completeIDs(2),
+		ValidArgsFunction: completeIDs(nodeID, nodeID),
 		RunE: func(_ *cobra.Command, args []string) error {
 			if toRoot == (len(args) == 2) {
 				return fmt.Errorf("specify either <new-parent> or --root")
@@ -184,7 +184,7 @@ func newRmCmd() *cobra.Command {
 		Use:               "rm <id>",
 		Short:             "Remove a hypothesis without children",
 		Args:              cobra.ExactArgs(1),
-		ValidArgsFunction: completeIDs(1),
+		ValidArgsFunction: completeIDs(nodeID),
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := openSession()
 			if err != nil {

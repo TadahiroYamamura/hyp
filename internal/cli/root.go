@@ -27,6 +27,7 @@ func NewRootCmd() *cobra.Command {
 		newRmCmd(),
 		newShowCmd(),
 		newUndoCmd(),
+		newEvidenceCmd(),
 	)
 	return root
 }
@@ -39,11 +40,12 @@ func Execute() int {
 	return 0
 }
 
-// session はカレントディレクトリの研究ディレクトリと、その全ノードから組んだツリー。
+// session はカレントディレクトリの研究ディレクトリと、その全ノードから組んだツリー、全根拠。
 type session struct {
-	repo  *research.Repo
-	nodes []*research.Node
-	tree  *research.Tree
+	repo      *research.Repo
+	nodes     []*research.Node
+	tree      *research.Tree
+	evidences []*research.Evidence
 }
 
 func openSession() (*session, error) {
@@ -59,7 +61,11 @@ func openSession() (*session, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &session{repo: repo, nodes: nodes, tree: research.BuildTree(nodes)}, nil
+	evs, err := repo.LoadEvidence()
+	if err != nil {
+		return nil, err
+	}
+	return &session{repo: repo, nodes: nodes, tree: research.BuildTree(nodes), evidences: evs}, nil
 }
 
 func (s *session) resolve(prefix string) (*research.Node, error) {
@@ -78,8 +84,12 @@ func (s *session) save(nodes ...*research.Node) ([]string, error) {
 	return paths, nil
 }
 
+func (s *session) actor() (string, error) {
+	return gitutil.Actor(s.repo.Root)
+}
+
 func (s *session) commit(message string, paths ...string) error {
-	actor, err := gitutil.Actor(s.repo.Root)
+	actor, err := s.actor()
 	if err != nil {
 		return err
 	}
@@ -88,11 +98,18 @@ func (s *session) commit(message string, paths ...string) error {
 
 func now() time.Time { return time.Now().UTC() }
 
-// completeIDs は ID 引数の Tab 補完候補を「ID<TAB>タイトル」の形で返す。
-// zsh / fish ではタイトルが説明として並ぶので、ID を覚えていなくても選べる。
-func completeIDs(maxArgs int) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+type idKind int
+
+const (
+	nodeID idKind = iota
+	evidenceID
+)
+
+// completeIDs は ID 引数の Tab 補完候補を「ID<TAB>説明」の形で返す。kinds は引数の位置ごとの ID の種類。
+// zsh / fish では説明が並ぶので、ID を覚えていなくても選べる。
+func completeIDs(kinds ...idKind) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		if len(args) >= maxArgs {
+		if len(args) >= len(kinds) {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 		s, err := openSession()
@@ -100,9 +117,18 @@ func completeIDs(maxArgs int) func(*cobra.Command, []string, string) ([]string, 
 			return nil, cobra.ShellCompDirectiveError
 		}
 		var out []string
-		for _, n := range s.nodes {
-			if strings.HasPrefix(n.ID, toComplete) {
-				out = append(out, n.ID+"\t"+s.tree.Label(n.ID)+" "+n.Title)
+		switch kinds[len(args)] {
+		case nodeID:
+			for _, n := range s.nodes {
+				if strings.HasPrefix(n.ID, toComplete) {
+					out = append(out, n.ID+"\t"+s.tree.Label(n.ID)+" "+n.Title)
+				}
+			}
+		case evidenceID:
+			for _, e := range s.evidences {
+				if strings.HasPrefix(e.ID, toComplete) {
+					out = append(out, e.ID+"\t"+e.Summary)
+				}
 			}
 		}
 		return out, cobra.ShellCompDirectiveNoFileComp

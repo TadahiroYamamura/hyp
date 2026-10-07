@@ -146,12 +146,16 @@ Bash 経由の書き込みは権限設定では防げない。承認の偽造を
 | `hyp evidence show <evidence>` | 根拠の中身、承認状態、紐づけている仮説を表示 |
 | `hyp check` | 整合性検査 |
 | `hyp prime` | AI エージェント向けの使い方を出力する |
-| `hyp setup claude` | Claude Code の SessionStart フックに `hyp prime` を登録し、deny 設定（`hyp evidence approve`、`hyp undo --force`、研究ディレクトリへの Edit/Write）と `HYP_ACTOR` を入れる |
+| `hyp setup claude` | 研究ディレクトリの `.claude/settings.json` に、SessionStart フックで `hyp prime` を実行する設定、deny 設定、`HYP_ACTOR=ai:claude` を入れる |
 
 - エージェント向けの使い方は、研究ディレクトリのファイルに書き込まず `hyp prime` が出力する。CLI の更新と使い方の説明がずれないため（Beads と同じ方式）
 - `hyp prime` は研究の現在の状態を出力しない。状態はセッション中に変わるため、必要なときに `show` / `check` で取得させる
 - `hyp undo` は直前のコミットだけを取り消す。古いコミットまで遡ると後の操作と衝突しうるため。hyp のコミット（`Hyp-Actor` を持つもの）以外は `--force` がなければ取り消さない。`--force` は CLI を経由しない変更まで消せるため、AI には使わせない
 - `hyp undo` は git revert を使わず、直前のコミットで変わったファイルを一つ前の状態に戻してコミットする。取り消しのコミットにも対象のファイルだけを含め、`Hyp-Actor` を付けるため
+- `HYP_ACTOR` は `ai:claude` に固定する。モデル名まで入れると、会話の途中でモデルを切り替えたときに記録と実際がずれるため
+- deny 設定は `hyp evidence approve`、`hyp undo --force`、`hyp.yaml`・`hypotheses/`・`evidence/` への Edit。Edit の規則は Write など、ほかのファイル書き換えツールにも効く。hyp が管理するもの以外（`.claude/settings.json` 自体など）は対象にしない
+- `hyp evidence approve` と `hyp undo --force` は、deny 設定に加えて CLI でも主体が `ai:` なら拒否する
+- `hyp setup claude` は既存の設定を残して足すだけで、何度実行しても結果は変わらない
 - `hyp init` はエージェントの設定に触れず、`hyp setup claude` を明示的に実行したときだけ入れる。権限設定まで変更するため、`init` のついでに行われると気づきにくい
 
 ## 整合性の検査 `hyp check`

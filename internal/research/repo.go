@@ -19,6 +19,9 @@ const (
 	evidenceFile  = "evidence.yaml"
 )
 
+// ManagedPaths は hyp が管理するパス。これらへの変更は CLI を通して行う。
+var ManagedPaths = []string{MarkerFile, hypothesesDir, evidenceDir}
+
 // Repo は研究ディレクトリ。パスはすべて Root からの相対パスで返す（git に渡すため）。
 type Repo struct {
 	Root string
@@ -70,30 +73,59 @@ func (r *Repo) NodePath(id string) string {
 }
 
 func (r *Repo) LoadNodes() ([]*Node, error) {
+	nodes, issues := r.loadNodes()
+	if len(issues) > 0 {
+		return nil, issues[0]
+	}
+	return nodes, nil
+}
+
+// loadNodes は読めないファイルがあっても残りを読み、読めなかったファイルを issues として返す。
+// 通常のコマンドは最初の issue で止まり、check はすべてを報告する。
+func (r *Repo) loadNodes() ([]*Node, []Issue) {
 	entries, err := os.ReadDir(filepath.Join(r.Root, hypothesesDir))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, []Issue{errorIssue(hypothesesDir, err.Error())}
 	}
 	var nodes []*Node
+	var issues []Issue
 	for _, e := range entries {
+		rel := filepath.Join(hypothesesDir, e.Name())
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+			issues = append(issues, warningIssue(rel, "not a hypothesis file"))
 			continue
 		}
-		path := filepath.Join(r.Root, hypothesesDir, e.Name())
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
 		var n Node
-		if err := yaml.Unmarshal(b, &n); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", path, err)
+		if err := decodeYAML(filepath.Join(r.Root, rel), &n); err != nil {
+			issues = append(issues, errorIssue(rel, err.Error()))
+			continue
+		}
+		// ファイル名と ID が食い違うと、ID の重複や保存先の取り違えが起きるので読み込まない。
+		if e.Name() != n.ID+".yaml" {
+			issues = append(issues, errorIssue(rel, fmt.Sprintf("id %q does not match the file name", n.ID)))
+			continue
 		}
 		nodes = append(nodes, &n)
 	}
-	return nodes, nil
+	return nodes, issues
+}
+
+// decodeYAML は定義にないフィールドをエラーにする。直接編集したときの綴り間違いを見逃さないため。
+func decodeYAML(path string, v any) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	dec := yaml.NewDecoder(f)
+	dec.KnownFields(true)
+	if err := dec.Decode(v); err != nil {
+		return fmt.Errorf("parse: %w", err)
+	}
+	return nil
 }
 
 // SaveNode は書き込んだファイルの相対パスを返す。
@@ -131,30 +163,41 @@ func (r *Repo) EvidenceFilePath(id, name string) string {
 }
 
 func (r *Repo) LoadEvidence() ([]*Evidence, error) {
+	evs, issues := r.loadEvidence()
+	if len(issues) > 0 {
+		return nil, issues[0]
+	}
+	return evs, nil
+}
+
+func (r *Repo) loadEvidence() ([]*Evidence, []Issue) {
 	entries, err := os.ReadDir(filepath.Join(r.Root, evidenceDir))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, []Issue{errorIssue(evidenceDir, err.Error())}
 	}
 	var evs []*Evidence
+	var issues []Issue
 	for _, e := range entries {
 		if !e.IsDir() {
+			issues = append(issues, warningIssue(filepath.Join(evidenceDir, e.Name()), "not an evidence directory"))
 			continue
 		}
-		path := filepath.Join(r.Root, r.EvidencePath(e.Name()))
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
+		rel := r.EvidencePath(e.Name())
 		var ev Evidence
-		if err := yaml.Unmarshal(b, &ev); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", path, err)
+		if err := decodeYAML(filepath.Join(r.Root, rel), &ev); err != nil {
+			issues = append(issues, errorIssue(rel, err.Error()))
+			continue
+		}
+		if e.Name() != ev.ID {
+			issues = append(issues, errorIssue(rel, fmt.Sprintf("id %q does not match the directory name", ev.ID)))
+			continue
 		}
 		evs = append(evs, &ev)
 	}
-	return evs, nil
+	return evs, issues
 }
 
 // SaveEvidence は書き込んだファイルの相対パスを返す。

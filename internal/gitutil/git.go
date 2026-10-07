@@ -12,6 +12,12 @@ import (
 const ActorEnv = "HYP_ACTOR"
 
 func run(dir string, args ...string) (string, error) {
+	out, err := runRaw(dir, args...)
+	return strings.TrimSpace(out), err
+}
+
+// runRaw は出力の前後の空白を残す。git status --porcelain は行頭の空白に意味があるため。
+func runRaw(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
@@ -20,7 +26,7 @@ func run(dir string, args ...string) (string, error) {
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
 	}
-	return strings.TrimSpace(stdout.String()), nil
+	return stdout.String(), nil
 }
 
 func IsInsideWorkTree(dir string) bool {
@@ -107,4 +113,32 @@ func Undo(dir, actor string, force bool) (string, error) {
 		return "", err
 	}
 	return subject, nil
+}
+
+// Uncommitted は paths の下にある未コミットの変更（未追跡のファイルを含む）を、dir からの相対パスで返す。
+func Uncommitted(dir string, paths ...string) ([]string, error) {
+	args := append([]string{"status", "--porcelain", "-z", "--untracked-files=all", "--"}, paths...)
+	out, err := runRaw(dir, args...)
+	if err != nil {
+		return nil, err
+	}
+	// porcelain 形式のパスは常にリポジトリのルートからの相対パスなので、dir までの部分を除く。
+	prefix, err := run(dir, "rev-parse", "--show-prefix")
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	entries := strings.Split(out, "\x00")
+	for i := 0; i < len(entries); i++ {
+		e := entries[i]
+		if len(e) < 4 {
+			continue
+		}
+		files = append(files, strings.TrimPrefix(e[3:], prefix))
+		// リネームとコピーは移動元のパスが次の要素に続くので読み飛ばす。
+		if e[0] == 'R' || e[0] == 'C' {
+			i++
+		}
+	}
+	return files, nil
 }

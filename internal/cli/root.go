@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -29,12 +30,17 @@ func NewRootCmd() *cobra.Command {
 		newUndoCmd(),
 		newEvidenceCmd(),
 		newConcludeCmd(),
+		newCheckCmd(),
 	)
 	return root
 }
 
 func Execute() int {
 	if err := NewRootCmd().Execute(); err != nil {
+		var code silentExit
+		if errors.As(err, &code) {
+			return int(code)
+		}
 		fmt.Fprintln(os.Stderr, "error:", err)
 		return 1
 	}

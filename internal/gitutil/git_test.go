@@ -211,6 +211,65 @@ func TestUndo(t *testing.T) {
 	})
 }
 
+func TestUncommitted(t *testing.T) {
+	t.Run("指定したパスの下の変更・未追跡・削除だけを返す", func(t *testing.T) {
+		dir := newRepo(t)
+		os.MkdirAll(filepath.Join(dir, "hyp", "sub"), 0o755)
+		write(t, dir, "hyp/a.yaml", "a")
+		write(t, dir, "hyp/b.yaml", "b")
+		if err := Commit(dir, "base", "human:tester", "hyp/a.yaml", "hyp/b.yaml"); err != nil {
+			t.Fatal(err)
+		}
+		write(t, dir, "hyp/a.yaml", "edited")
+		os.Remove(filepath.Join(dir, "hyp", "b.yaml"))
+		write(t, dir, "hyp/sub/new.yaml", "new")
+		write(t, dir, "outside.txt", "x")
+		got, err := Uncommitted(dir, "hyp")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Join(got, ",") != "hyp/a.yaml,hyp/b.yaml,hyp/sub/new.yaml" {
+			t.Errorf("got %v", got)
+		}
+	})
+	t.Run("ステージ済みのリネームは移動先のパスだけを返す", func(t *testing.T) {
+		dir := newRepo(t)
+		write(t, dir, "old.yaml", "a")
+		if err := Commit(dir, "base", "human:tester", "old.yaml"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := run(dir, "mv", "old.yaml", "new.yaml"); err != nil {
+			t.Fatal(err)
+		}
+		got, err := Uncommitted(dir, ".")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Join(got, ",") != "new.yaml" {
+			t.Errorf("got %q", got)
+		}
+	})
+	t.Run("変更がなければ空を返す", func(t *testing.T) {
+		dir := newRepo(t)
+		if got, err := Uncommitted(dir, "."); err != nil || len(got) != 0 {
+			t.Errorf("got %v, %v", got, err)
+		}
+	})
+	t.Run("サブディレクトリから調べてもそのディレクトリからの相対パスで返す", func(t *testing.T) {
+		dir := newRepo(t)
+		sub := filepath.Join(dir, "research")
+		os.MkdirAll(sub, 0o755)
+		write(t, sub, "a.yaml", "a")
+		got, err := Uncommitted(sub, ".")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Join(got, ",") != "a.yaml" {
+			t.Errorf("got %v", got)
+		}
+	})
+}
+
 func TestUndoInSubdirectory(t *testing.T) {
 	t.Run("研究ディレクトリがリポジトリのサブディレクトリでも取り消せる", func(t *testing.T) {
 		dir := newRepo(t)

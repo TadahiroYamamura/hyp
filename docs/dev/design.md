@@ -83,6 +83,7 @@ my-research/              # git リポジトリ
 | `source` | 出典 URL（任意） |
 | `files` | 添付ファイルのパスと sha256 |
 | `found_by` | 根拠を見つけた主体。`ai:<モデル名>` / `human:<名前>` |
+| `created_at` | 作成日時 |
 | `approved_by` | 承認者。未承認なら空 |
 | `approved_at` | 承認日時 |
 | `approved_fingerprint` | 承認時点の fingerprint |
@@ -91,6 +92,15 @@ my-research/              # git リポジトリ
 - ファイルのバージョン管理は git に任せる
 - fingerprint は `summary`・`source`・各添付ファイルの sha256 から計算する。添付だけでなく本文の書き換えも検知するため（Doorstop の suspect link と同じ考え方）
 - 承認後に fingerprint が変わると `hyp check` が警告する
+- 承認時は、記録済みのハッシュではなく添付ファイルの現在の内容から sha256 と fingerprint を計算し直す。承認者が確認したのは現在の内容のため
+- 主体が `ai:` で始まる場合、`approve` はエラーにする。権限設定（deny）を補う二重の防御で、AI が `HYP_ACTOR` を名乗っている限り誤って承認できない
+- 添付ファイルはファイル名だけで `evidence/<id>/` の直下に置く。同じ名前の添付と `evidence.yaml` という名前は拒否する
+- `found_by` を省略したら、操作の主体（`HYP_ACTOR` または git の利用者）を入れる
+- 紐づけ時の `stance` は必須。既定値を置くと、向きを考えずに紐づけた根拠が支持として扱われるため
+- 紐づけ済みの根拠を別の `stance` で `link` すると、`stance` だけを更新する
+- `unlink` は外した `stance` をコミットメッセージに残す。紐づけ直すときに必要になるため
+- `rm` は、根拠のディレクトリに記録にないファイルがあれば何も消さずにエラーにする。git で追跡されていない可能性があり、消すと戻せないため
+- 承認状態は `unapproved` / `approved` / `changed-since-approval` の 3 つ。添付と本文から fingerprint を計算し直して判定する
 
 ## git 連携
 
@@ -124,7 +134,10 @@ Bash 経由の書き込みは権限設定では防げない。承認の偽造を
 | `hyp conclude <id>` | 結論の導出。条件と未確定ノードを表示 |
 | `hyp evidence add <node> --summary --file... --source --found-by` | 根拠を作成し添付をコピー |
 | `hyp evidence link <node> <evidence>` | 既存の根拠を紐づけ |
+| `hyp evidence unlink <node> <evidence>` | 紐づけを外す。根拠そのものは残す |
 | `hyp evidence approve <evidence>` | 承認（人間のみ） |
+| `hyp evidence rm <evidence>` | 根拠を添付ごと削除。どの仮説にも紐づいていないときのみ |
+| `hyp evidence show <evidence>` | 根拠の中身、承認状態、紐づけている仮説を表示 |
 | `hyp check` | 整合性検査 |
 | `hyp prime` | AI エージェント向けの使い方を出力する |
 | `hyp setup claude` | Claude Code の SessionStart フックに `hyp prime` を登録し、deny 設定（`hyp evidence approve`、`hyp undo --force`、研究ディレクトリへの Edit/Write）と `HYP_ACTOR` を入れる |
@@ -136,7 +149,7 @@ Bash 経由の書き込みは権限設定では防げない。承認の偽造を
 - `hyp init` はエージェントの設定に触れず、`hyp setup claude` を明示的に実行したときだけ入れる。権限設定まで変更するため、`init` のついでに行われると気づきにくい
 
 出力は英語。ID 引数は Cobra の動的補完で Tab 補完できるようにする。
-`show` と `conclude` は `--json` を持つ。AI がツリーを読むとき、人間向けの表示を解析させないため。
+`show`・`conclude`・`evidence show` は `--json` を持つ。AI がツリーを読むとき、人間向けの表示を解析させないため。
 
 ## 先行研究
 

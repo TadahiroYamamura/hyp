@@ -63,11 +63,10 @@ and approves evidence.
 
 ## Decomposing a hypothesis
 
-1. Read the current tree with `hyp show <id> --json`.
-2. Propose sub-hypotheses to the human before adding them: say which `combine` you would use
-   and why the children are mutually exclusive and collectively exhaustive.
-3. After agreement, add them with `hyp add <parent> <title>`, set `--combine` on the parent,
-   and set `--condition` on each case if the parent is `cases`.
-4. For each leaf, suggest a `--method`: how it can be tested and what result would reject it.
-5. Look for ways the hypothesis could be wrong, not only for support.
-6. Run `hyp check` and fix what you caused.
+Use the `hyp-decompose` skill if it is available. Without it, at least:
+
+1. Split by one explicit `axis`, so that the children are mutually exclusive and collectively
+   exhaustive. Have someone other than the author check this before adding the children.
+2. Give each child a `weight` for its impact on the parent, and dig into heavy branches only.
+   Do not dig into a branch just because it came up in conversation.
+3. Agree with the human before adding hypotheses, and run `hyp check` afterwards.

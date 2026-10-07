@@ -47,6 +47,7 @@ my-research/              # git リポジトリ
 | `combine` | 子を持つノードのみ。`and` / `or` / `cases` |
 | `condition` | 親の `combine` が `cases` のときのみ。条件を表す文字列 |
 | `evidence` | 根拠への紐づけのリスト。各要素は `id` と `stance`（`supports` / `refutes` / `inconclusive`） |
+| `created_at` | 作成日時。兄弟の並び順（表示用の番号）に使う |
 
 `stance` を根拠側ではなく紐づけ側に持つのは、同じ根拠がある仮説を支持し別の仮説を反証することがあるため。
 
@@ -66,7 +67,9 @@ my-research/              # git リポジトリ
 - `on-hold` は undetermined として扱う
 - `(A and B) or C` のような関係は中間ノードで表す（`or` の下に `and` のノードを置く）。式を書く方式は、ノード削除で式が壊れること、ツリーと論理構造がずれることから採らない
 - 条件は不透明な文字列として扱い、意味（排他・矛盾）は解釈しない
-- 子を持つノードに直接根拠を付けて人間が判定した場合は、手動の判定と導出結果を並べて表示し、食い違いを `hyp check` で警告する
+- 末端が子を持った時点で、その status は判定済みでも消す。判定済みのノードにサブ仮説を足すのはその判定を疑い直したことを意味し、後で子を除いても元の判定に戻すのは妥当でないため。以前の判定は git の履歴に残る
+- 最後の子を失って末端に戻ったノードは `untested` になる
+- 子を持つノードに根拠を紐づけることはできるが、判定には使わない
 - 導出が保証するのは「分解が正しいならこう言える」まで。分解の妥当性は人間と AI の判断による
 
 ## 根拠 `evidence/<id>/evidence.yaml`
@@ -114,19 +117,22 @@ Bash 経由の書き込みは権限設定では防げない。承認の偽造を
 | `hyp init` | `hyp.yaml` 作成、必要なら `git init` |
 | `hyp add [parent] <title>` | ノード追加。parent 省略でルート |
 | `hyp set <id> --status/--combine/--condition/--method/--description/--title` | 属性更新 |
-| `hyp mv <id> <new-parent>` | 移動 |
+| `hyp mv <id> (<new-parent> \| --root)` | 移動 |
 | `hyp rm <id>` | 削除。子を持つノードはエラー |
-| `hyp show [id]` | ツリー表示 |
+| `hyp show [id]` | 引数なしでルートの一覧、ID 指定でその下のツリーを表示 |
+| `hyp undo [--force]` | 直前のコミットを打ち消すコミットを作る |
 | `hyp conclude <id>` | 結論の導出。条件と未確定ノードを表示 |
 | `hyp evidence add <node> --summary --file... --source --found-by` | 根拠を作成し添付をコピー |
 | `hyp evidence link <node> <evidence>` | 既存の根拠を紐づけ |
 | `hyp evidence approve <evidence>` | 承認（人間のみ） |
 | `hyp check` | 整合性検査 |
 | `hyp prime` | AI エージェント向けの使い方を出力する |
-| `hyp setup claude` | Claude Code の SessionStart フックに `hyp prime` を登録し、deny 設定と `HYP_ACTOR` を入れる |
+| `hyp setup claude` | Claude Code の SessionStart フックに `hyp prime` を登録し、deny 設定（`hyp evidence approve`、`hyp undo --force`、研究ディレクトリへの Edit/Write）と `HYP_ACTOR` を入れる |
 
 - エージェント向けの使い方は、研究ディレクトリのファイルに書き込まず `hyp prime` が出力する。CLI の更新と使い方の説明がずれないため（Beads と同じ方式）
 - `hyp prime` は研究の現在の状態を出力しない。状態はセッション中に変わるため、必要なときに `show` / `check` で取得させる
+- `hyp undo` は直前のコミットだけを取り消す。古いコミットまで遡ると後の操作と衝突しうるため。hyp のコミット（`Hyp-Actor` を持つもの）以外は `--force` がなければ取り消さない。`--force` は CLI を経由しない変更まで消せるため、AI には使わせない
+- `hyp undo` は git revert を使わず、直前のコミットで変わったファイルを一つ前の状態に戻してコミットする。取り消しのコミットにも対象のファイルだけを含め、`Hyp-Actor` を付けるため
 - `hyp init` はエージェントの設定に触れず、`hyp setup claude` を明示的に実行したときだけ入れる。権限設定まで変更するため、`init` のついでに行われると気づきにくい
 
 出力は英語。ID 引数は Cobra の動的補完で Tab 補完できるようにする。

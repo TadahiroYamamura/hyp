@@ -210,3 +210,29 @@ func TestUndo(t *testing.T) {
 		}
 	})
 }
+
+func TestUndoInSubdirectory(t *testing.T) {
+	t.Run("研究ディレクトリがリポジトリのサブディレクトリでも取り消せる", func(t *testing.T) {
+		dir := newRepo(t)
+		sub := filepath.Join(dir, "research")
+		os.MkdirAll(sub, 0o755)
+		write(t, sub, "a.yaml", "v1")
+		if err := Commit(sub, "base", "human:tester", "a.yaml"); err != nil {
+			t.Fatal(err)
+		}
+		write(t, sub, "a.yaml", "v2")
+		write(t, sub, "b.yaml", "new")
+		if err := Commit(sub, "change", "human:tester", "a.yaml", "b.yaml"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Undo(sub, "human:tester", false); err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := read(t, sub, "a.yaml"); got != "v1" {
+			t.Errorf("a.yaml = %q", got)
+		}
+		if _, ok := read(t, sub, "b.yaml"); ok {
+			t.Error("b.yaml should be removed")
+		}
+	})
+}

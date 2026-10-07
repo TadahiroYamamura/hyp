@@ -75,7 +75,8 @@ func Undo(dir, actor string, force bool) (string, error) {
 			return "", fmt.Errorf("the last commit was not made by hyp; use --force to undo it anyway")
 		}
 	}
-	out, err := run(dir, "diff-tree", "--no-commit-id", "--name-only", "-r", "-z", "HEAD")
+	// 研究ディレクトリが git リポジトリの一部でもパスがずれないよう、dir からの相対パスで扱う。
+	out, err := run(dir, "diff-tree", "--relative", "--no-commit-id", "--name-only", "-r", "-z", "HEAD")
 	if err != nil {
 		return "", err
 	}
@@ -88,7 +89,7 @@ func Undo(dir, actor string, force bool) (string, error) {
 		return "", fmt.Errorf("files touched by the last commit have uncommitted changes:\n%s", dirty)
 	}
 	for _, p := range paths {
-		if _, err := run(dir, "cat-file", "-e", "HEAD~1:"+p); err == nil {
+		if _, err := run(dir, "cat-file", "-e", "HEAD~1:./"+p); err == nil {
 			_, err = run(dir, "checkout", "HEAD~1", "--", p)
 			if err != nil {
 				return "", err

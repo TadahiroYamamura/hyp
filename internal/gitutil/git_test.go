@@ -236,6 +236,36 @@ func TestUndo(t *testing.T) {
 			t.Fatalf("err = %v", err)
 		}
 	})
+	t.Run("追加したファイルを消して空になったディレクトリは、入れ子の親まで消す", func(t *testing.T) {
+		dir := setup(t)
+		os.MkdirAll(filepath.Join(dir, "evidence", "e1"), 0o755)
+		write(t, dir, "evidence/e1/evidence.yaml", "x")
+		write(t, dir, "evidence/e1/attached.txt", "y")
+		if err := Commit(dir, "evidence add", "", "human:tester", "evidence/e1/evidence.yaml", "evidence/e1/attached.txt"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Undo(dir, "human:tester", "", false); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "evidence")); !os.IsNotExist(err) {
+			t.Errorf("evidence/ should be removed: %v", err)
+		}
+	})
+	t.Run("追加したファイルを消しても、ほかのファイルが残るディレクトリは消さない", func(t *testing.T) {
+		dir := setup(t)
+		os.MkdirAll(filepath.Join(dir, "evidence", "e1"), 0o755)
+		write(t, dir, "evidence/e1/evidence.yaml", "x")
+		write(t, dir, "evidence/e1/note.txt", "untracked")
+		if err := Commit(dir, "evidence add", "", "human:tester", "evidence/e1/evidence.yaml"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Undo(dir, "human:tester", "", false); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := read(t, dir, "evidence/e1/note.txt"); !ok {
+			t.Error("evidence/e1/note.txt should remain")
+		}
+	})
 }
 
 func TestUncommitted(t *testing.T) {
@@ -298,6 +328,24 @@ func TestUncommitted(t *testing.T) {
 }
 
 func TestUndoInSubdirectory(t *testing.T) {
+	t.Run("空になっても研究ディレクトリそのものは消さない", func(t *testing.T) {
+		dir := newRepo(t)
+		write(t, dir, "base.txt", "v1")
+		run(dir, "add", "base.txt")
+		run(dir, "commit", "-q", "-m", "base")
+		sub := filepath.Join(dir, "research")
+		os.MkdirAll(sub, 0o755)
+		write(t, sub, "a.yaml", "new")
+		if err := Commit(sub, "add", "", "human:tester", "a.yaml"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Undo(sub, "human:tester", "", false); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(sub); err != nil {
+			t.Errorf("research directory should remain: %v", err)
+		}
+	})
 	t.Run("研究ディレクトリがリポジトリのサブディレクトリでも取り消せる", func(t *testing.T) {
 		dir := newRepo(t)
 		sub := filepath.Join(dir, "research")

@@ -105,9 +105,15 @@ func Undo(dir, actor, reason string, force bool) (string, error) {
 			if err != nil {
 				return "", err
 			}
-		} else if err := os.Remove(filepath.Join(dir, p)); err != nil {
+		} else {
 			// git rm で索引からも消すと、Commit の git add がパスを見つけられず失敗するため、作業ツリーだけ消す。
-			return "", err
+			full := filepath.Join(dir, p)
+			if err := os.Remove(full); err != nil {
+				return "", err
+			}
+			if err := removeEmptyParents(dir, filepath.Dir(full)); err != nil {
+				return "", err
+			}
 		}
 	}
 	subject, err := run(dir, "log", "-1", "--format=%s")
@@ -118,6 +124,26 @@ func Undo(dir, actor, reason string, force bool) (string, error) {
 		return "", err
 	}
 	return subject, nil
+}
+
+// removeEmptyParents は sub から root の手前まで、空になったディレクトリを消す。
+// git が作業ツリーからファイルを消すときと同じ扱いにするため。根拠のディレクトリが
+// evidence.yaml のないまま残ると、研究ディレクトリを読み込めなくなる。
+func removeEmptyParents(root, sub string) error {
+	root = filepath.Clean(root)
+	for d := filepath.Clean(sub); strings.HasPrefix(d, root+string(filepath.Separator)); d = filepath.Dir(d) {
+		entries, err := os.ReadDir(d)
+		if err != nil {
+			return err
+		}
+		if len(entries) > 0 {
+			return nil
+		}
+		if err := os.Remove(d); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Uncommitted は paths の下にある未コミットの変更（未追跡のファイルを含む）を、dir からの相対パスで返す。

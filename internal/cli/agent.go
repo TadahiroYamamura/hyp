@@ -95,7 +95,7 @@ func newSetupCmd() *cobra.Command {
 			if err := os.WriteFile(path, out, 0o644); err != nil {
 				return err
 			}
-			if err := s.commit("setup claude", claudeSettingsPath); err != nil {
+			if err := s.commit("setup claude", "", claudeSettingsPath); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", path)

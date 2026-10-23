@@ -16,6 +16,15 @@ and approves evidence.
 - To read the tree, use `--json` (`hyp show <id> --json`, `hyp conclude <id> --json`,
   `hyp evidence show <id> --json`) instead of parsing the human-readable output.
 - If you made a mistake with your last command, run `hyp undo`.
+- Every command that changes the research takes `--reason`, and you must pass it. It is
+  recorded in the commit message so that others can later trace why the research is the way
+  it is. Write what triggered the change and what was decided, not what the command did:
+  - a human's question or objection: the question, and the conclusion you reached together
+  - a human's instruction: the instruction
+  - your own proposal: the grounds, and the result of the MECE check if you decomposed
+  - research: what you searched or read, and why it bears on the hypothesis
+  - a mistake (`hyp undo`): what was wrong
+  "As instructed" or "updated the weight" is not a reason.
 
 ## Data model
 
@@ -44,6 +53,8 @@ and approves evidence.
   a `stance`: supports, refutes or inconclusive.
 
 ## Commands
+
+`add`, `set`, `mv`, `rm`, `undo` and `evidence add/link/unlink/rm` also take `--reason <text>`.
 
     hyp show [id] [--json]                  list roots, or show the tree under a hypothesis
     hyp add [parent] <title>                add a hypothesis (prints its id)

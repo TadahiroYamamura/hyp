@@ -97,12 +97,30 @@ func (s *session) actor() (string, error) {
 	return gitutil.Actor(s.repo.Root)
 }
 
-func (s *session) commit(message string, paths ...string) error {
+// commit は reason をコミットメッセージの本文にしてコミットする。
+func (s *session) commit(message, reason string, paths ...string) error {
 	actor, err := s.actor()
 	if err != nil {
 		return err
 	}
-	return gitutil.Commit(s.repo.Root, message, actor, paths...)
+	return gitutil.Commit(s.repo.Root, message, reason, actor, paths...)
+}
+
+func registerReasonFlag(cmd *cobra.Command, reason *string) {
+	cmd.Flags().StringVar(reason, "reason", "", "why this change is made, recorded in the commit message (required for AI agents)")
+}
+
+// requireReason は主体が AI なのに理由がなければエラーを返す。
+// 途中で失敗して未コミットの変更が残らないよう、ファイルを変更する前に呼ぶ。
+func (s *session) requireReason(reason string) error {
+	actor, err := s.actor()
+	if err != nil {
+		return err
+	}
+	if research.IsAI(actor) && strings.TrimSpace(reason) == "" {
+		return fmt.Errorf("--reason is required when the actor is an AI (actor is %s)", actor)
+	}
+	return nil
 }
 
 func now() time.Time { return time.Now().UTC() }

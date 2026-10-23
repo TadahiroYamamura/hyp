@@ -54,13 +54,18 @@ func Actor(dir string) (string, error) {
 
 // Commit は paths だけをコミットする（git commit にパスを渡すと、ほかにステージ済みの変更があっても含めない）。
 // CLI を経由しない変更を未コミットのまま残し、検知できるようにするため。
-func Commit(dir, message, actor string, paths ...string) error {
+// body が空でなければコミットメッセージの本文にする。
+func Commit(dir, subject, body, actor string, paths ...string) error {
 	addArgs := append([]string{"add", "-A", "--"}, paths...)
 	if _, err := run(dir, addArgs...); err != nil {
 		return err
 	}
-	commitArgs := append([]string{"commit", "-q", "-m", message, "--trailer", "Hyp-Actor: " + actor, "--"}, paths...)
-	_, err := run(dir, commitArgs...)
+	commitArgs := []string{"commit", "-q", "-m", subject}
+	if body != "" {
+		commitArgs = append(commitArgs, "-m", body)
+	}
+	commitArgs = append(commitArgs, "--trailer", "Hyp-Actor: "+actor, "--")
+	_, err := run(dir, append(commitArgs, paths...)...)
 	return err
 }
 
@@ -68,7 +73,7 @@ func Commit(dir, message, actor string, paths ...string) error {
 // git revert を使わないのは、取り消しのコミットにも対象のファイルだけを含め、
 // Hyp-Actor を付けるため（revert の途中ではパスを指定したコミットができない）。
 // force が false なら、hyp が作ったコミット（Hyp-Actor を持つもの）だけを取り消す。
-func Undo(dir, actor string, force bool) (string, error) {
+func Undo(dir, actor, reason string, force bool) (string, error) {
 	if _, err := run(dir, "rev-parse", "--verify", "-q", "HEAD~1"); err != nil {
 		return "", fmt.Errorf("nothing to undo: HEAD has no parent")
 	}
@@ -109,7 +114,7 @@ func Undo(dir, actor string, force bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := Commit(dir, "undo: "+subject, actor, paths...); err != nil {
+	if err := Commit(dir, "undo: "+subject, reason, actor, paths...); err != nil {
 		return "", err
 	}
 	return subject, nil

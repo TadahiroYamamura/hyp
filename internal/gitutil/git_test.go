@@ -37,7 +37,7 @@ func TestCommit(t *testing.T) {
 		if _, err := run(dir, "add", "other.yaml"); err != nil {
 			t.Fatal(err)
 		}
-		if err := Commit(dir, "msg", "human:tester", "target.yaml"); err != nil {
+		if err := Commit(dir, "msg", "", "human:tester", "target.yaml"); err != nil {
 			t.Fatal(err)
 		}
 		files, _ := run(dir, "show", "--name-only", "--format=", "HEAD")
@@ -52,11 +52,11 @@ func TestCommit(t *testing.T) {
 	t.Run("削除したファイルの削除をコミットする", func(t *testing.T) {
 		dir := newRepo(t)
 		write(t, dir, "x.yaml", "a")
-		if err := Commit(dir, "add", "human:tester", "x.yaml"); err != nil {
+		if err := Commit(dir, "add", "", "human:tester", "x.yaml"); err != nil {
 			t.Fatal(err)
 		}
 		os.Remove(filepath.Join(dir, "x.yaml"))
-		if err := Commit(dir, "rm", "human:tester", "x.yaml"); err != nil {
+		if err := Commit(dir, "rm", "", "human:tester", "x.yaml"); err != nil {
 			t.Fatal(err)
 		}
 		if files, _ := run(dir, "ls-files"); files != "" {
@@ -66,12 +66,39 @@ func TestCommit(t *testing.T) {
 	t.Run("操作の主体をHyp-Actorトレーラーとして残す", func(t *testing.T) {
 		dir := newRepo(t)
 		write(t, dir, "x.yaml", "a")
-		if err := Commit(dir, "msg", "ai:claude", "x.yaml"); err != nil {
+		if err := Commit(dir, "msg", "", "ai:claude", "x.yaml"); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := run(dir, "log", "-1", "--format=%(trailers:key=Hyp-Actor,valueonly)")
 		if got != "ai:claude" {
 			t.Errorf("trailer = %q", got)
+		}
+	})
+	t.Run("本文を渡すと件名の後に本文を残し、Hyp-Actorはトレーラーとして読める", func(t *testing.T) {
+		dir := newRepo(t)
+		write(t, dir, "x.yaml", "a")
+		if err := Commit(dir, "msg", "重みの根拠を問われたので見直した", "ai:claude", "x.yaml"); err != nil {
+			t.Fatal(err)
+		}
+		got, _ := run(dir, "log", "-1", "--format=%B")
+		want := "msg\n\n重みの根拠を問われたので見直した\n\nHyp-Actor: ai:claude"
+		if got != want {
+			t.Errorf("message = %q, want %q", got, want)
+		}
+		actor, _ := run(dir, "log", "-1", "--format=%(trailers:key=Hyp-Actor,valueonly)")
+		if actor != "ai:claude" {
+			t.Errorf("trailer = %q", actor)
+		}
+	})
+	t.Run("本文が空ならコミットメッセージは件名とトレーラーだけになる", func(t *testing.T) {
+		dir := newRepo(t)
+		write(t, dir, "x.yaml", "a")
+		if err := Commit(dir, "msg", "", "human:tester", "x.yaml"); err != nil {
+			t.Fatal(err)
+		}
+		got, _ := run(dir, "log", "-1", "--format=%B")
+		if want := "msg\n\nHyp-Actor: human:tester"; got != want {
+			t.Errorf("message = %q, want %q", got, want)
 		}
 	})
 }
@@ -114,7 +141,7 @@ func TestUndo(t *testing.T) {
 	setup := func(t *testing.T) string {
 		dir := newRepo(t)
 		write(t, dir, "a.yaml", "v1")
-		if err := Commit(dir, "base", "human:tester", "a.yaml"); err != nil {
+		if err := Commit(dir, "base", "", "human:tester", "a.yaml"); err != nil {
 			t.Fatal(err)
 		}
 		return dir
@@ -122,16 +149,16 @@ func TestUndo(t *testing.T) {
 	t.Run("hypのコミットで変更・追加・削除したファイルをすべて元に戻す", func(t *testing.T) {
 		dir := setup(t)
 		write(t, dir, "b.yaml", "b")
-		if err := Commit(dir, "base2", "human:tester", "b.yaml"); err != nil {
+		if err := Commit(dir, "base2", "", "human:tester", "b.yaml"); err != nil {
 			t.Fatal(err)
 		}
 		write(t, dir, "a.yaml", "v2")
 		write(t, dir, "c.yaml", "new")
 		os.Remove(filepath.Join(dir, "b.yaml"))
-		if err := Commit(dir, "change", "human:tester", "a.yaml", "b.yaml", "c.yaml"); err != nil {
+		if err := Commit(dir, "change", "", "human:tester", "a.yaml", "b.yaml", "c.yaml"); err != nil {
 			t.Fatal(err)
 		}
-		subject, err := Undo(dir, "human:tester", false)
+		subject, err := Undo(dir, "human:tester", "", false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -159,7 +186,7 @@ func TestUndo(t *testing.T) {
 		write(t, dir, "a.yaml", "manual")
 		run(dir, "commit", "-q", "-am", "manual")
 		before := head(t, dir)
-		if _, err := Undo(dir, "human:tester", false); err == nil || !strings.Contains(err.Error(), "--force") {
+		if _, err := Undo(dir, "human:tester", "", false); err == nil || !strings.Contains(err.Error(), "--force") {
 			t.Fatalf("err = %v", err)
 		}
 		if head(t, dir) != before {
@@ -170,7 +197,7 @@ func TestUndo(t *testing.T) {
 		dir := setup(t)
 		write(t, dir, "a.yaml", "manual")
 		run(dir, "commit", "-q", "-am", "manual")
-		if _, err := Undo(dir, "human:tester", true); err != nil {
+		if _, err := Undo(dir, "human:tester", "", true); err != nil {
 			t.Fatal(err)
 		}
 		if got, _ := read(t, dir, "a.yaml"); got != "v1" {
@@ -180,10 +207,10 @@ func TestUndo(t *testing.T) {
 	t.Run("対象のファイルに未コミットの変更があれば上書きせずに中止する", func(t *testing.T) {
 		dir := setup(t)
 		write(t, dir, "a.yaml", "v2")
-		Commit(dir, "change", "human:tester", "a.yaml")
+		Commit(dir, "change", "", "human:tester", "a.yaml")
 		write(t, dir, "a.yaml", "edited directly")
 		before := head(t, dir)
-		if _, err := Undo(dir, "human:tester", false); err == nil {
+		if _, err := Undo(dir, "human:tester", "", false); err == nil {
 			t.Fatal("want error")
 		}
 		if got, _ := read(t, dir, "a.yaml"); got != "edited directly" || head(t, dir) != before {
@@ -193,10 +220,10 @@ func TestUndo(t *testing.T) {
 	t.Run("ほかにステージ済みの変更があっても取り消しのコミットに含めない", func(t *testing.T) {
 		dir := setup(t)
 		write(t, dir, "a.yaml", "v2")
-		Commit(dir, "change", "human:tester", "a.yaml")
+		Commit(dir, "change", "", "human:tester", "a.yaml")
 		write(t, dir, "other.yaml", "x")
 		run(dir, "add", "other.yaml")
-		if _, err := Undo(dir, "human:tester", false); err != nil {
+		if _, err := Undo(dir, "human:tester", "", false); err != nil {
 			t.Fatal(err)
 		}
 		if files, _ := run(dir, "show", "--name-only", "--format=", "HEAD"); files != "a.yaml" {
@@ -205,7 +232,7 @@ func TestUndo(t *testing.T) {
 	})
 	t.Run("最初のコミットは取り消せない", func(t *testing.T) {
 		dir := setup(t)
-		if _, err := Undo(dir, "human:tester", true); err == nil || !strings.Contains(err.Error(), "nothing to undo") {
+		if _, err := Undo(dir, "human:tester", "", true); err == nil || !strings.Contains(err.Error(), "nothing to undo") {
 			t.Fatalf("err = %v", err)
 		}
 	})
@@ -217,7 +244,7 @@ func TestUncommitted(t *testing.T) {
 		os.MkdirAll(filepath.Join(dir, "hyp", "sub"), 0o755)
 		write(t, dir, "hyp/a.yaml", "a")
 		write(t, dir, "hyp/b.yaml", "b")
-		if err := Commit(dir, "base", "human:tester", "hyp/a.yaml", "hyp/b.yaml"); err != nil {
+		if err := Commit(dir, "base", "", "human:tester", "hyp/a.yaml", "hyp/b.yaml"); err != nil {
 			t.Fatal(err)
 		}
 		write(t, dir, "hyp/a.yaml", "edited")
@@ -235,7 +262,7 @@ func TestUncommitted(t *testing.T) {
 	t.Run("ステージ済みのリネームは移動先のパスだけを返す", func(t *testing.T) {
 		dir := newRepo(t)
 		write(t, dir, "old.yaml", "a")
-		if err := Commit(dir, "base", "human:tester", "old.yaml"); err != nil {
+		if err := Commit(dir, "base", "", "human:tester", "old.yaml"); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := run(dir, "mv", "old.yaml", "new.yaml"); err != nil {
@@ -276,15 +303,15 @@ func TestUndoInSubdirectory(t *testing.T) {
 		sub := filepath.Join(dir, "research")
 		os.MkdirAll(sub, 0o755)
 		write(t, sub, "a.yaml", "v1")
-		if err := Commit(sub, "base", "human:tester", "a.yaml"); err != nil {
+		if err := Commit(sub, "base", "", "human:tester", "a.yaml"); err != nil {
 			t.Fatal(err)
 		}
 		write(t, sub, "a.yaml", "v2")
 		write(t, sub, "b.yaml", "new")
-		if err := Commit(sub, "change", "human:tester", "a.yaml", "b.yaml"); err != nil {
+		if err := Commit(sub, "change", "", "human:tester", "a.yaml", "b.yaml"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := Undo(sub, "human:tester", false); err != nil {
+		if _, err := Undo(sub, "human:tester", "", false); err != nil {
 			t.Fatal(err)
 		}
 		if got, _ := read(t, sub, "a.yaml"); got != "v1" {

@@ -32,7 +32,7 @@ func registerStanceFlag(cmd *cobra.Command, stance *string) {
 }
 
 func newEvidenceAddCmd() *cobra.Command {
-	var summary, source, foundBy, stance string
+	var summary, source, foundBy, stance, reason string
 	var files []string
 	cmd := &cobra.Command{
 		Use:               "add <hypothesis> --summary <text> --stance <stance> [--file <path>]... [--source <url>]",
@@ -49,6 +49,9 @@ func newEvidenceAddCmd() *cobra.Command {
 			}
 			s, err := openSession()
 			if err != nil {
+				return err
+			}
+			if err := s.requireReason(reason); err != nil {
 				return err
 			}
 			n, err := s.resolve(args[0])
@@ -72,7 +75,7 @@ func newEvidenceAddCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := s.commit(fmt.Sprintf("evidence add %s to %s: %s", ev.ID, n.ID, ev.Summary), append(paths, nodePaths...)...); err != nil {
+			if err := s.commit(fmt.Sprintf("evidence add %s to %s: %s", ev.ID, n.ID, ev.Summary), reason, append(paths, nodePaths...)...); err != nil {
 				return err
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), ev.ID)
@@ -86,11 +89,12 @@ func newEvidenceAddCmd() *cobra.Command {
 	f.StringArrayVar(&files, "file", nil, "file to attach (copied into the evidence directory; repeatable)")
 	f.StringVar(&foundBy, "found-by", "", "who found the evidence, as ai:<model> or human:<name> (default: the current actor)")
 	registerStanceFlag(cmd, &stance)
+	registerReasonFlag(cmd, &reason)
 	return cmd
 }
 
 func newEvidenceLinkCmd() *cobra.Command {
-	var stance string
+	var stance, reason string
 	cmd := &cobra.Command{
 		Use:               "link <hypothesis> <evidence> --stance <stance>",
 		Short:             "Link existing evidence to a hypothesis, or change the stance of an existing link",
@@ -103,6 +107,9 @@ func newEvidenceLinkCmd() *cobra.Command {
 			}
 			s, err := openSession()
 			if err != nil {
+				return err
+			}
+			if err := s.requireReason(reason); err != nil {
 				return err
 			}
 			n, err := s.resolve(args[0])
@@ -120,15 +127,17 @@ func newEvidenceLinkCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return s.commit(fmt.Sprintf("evidence link %s to %s as %s", ev.ID, n.ID, st), paths...)
+			return s.commit(fmt.Sprintf("evidence link %s to %s as %s", ev.ID, n.ID, st), reason, paths...)
 		},
 	}
 	registerStanceFlag(cmd, &stance)
+	registerReasonFlag(cmd, &reason)
 	return cmd
 }
 
 func newEvidenceApproveCmd() *cobra.Command {
-	return &cobra.Command{
+	var reason string
+	cmd := &cobra.Command{
 		Use:               "approve <evidence>",
 		Short:             "Approve evidence after checking it (humans only)",
 		Args:              cobra.ExactArgs(1),
@@ -136,6 +145,9 @@ func newEvidenceApproveCmd() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := openSession()
 			if err != nil {
+				return err
+			}
+			if err := s.requireReason(reason); err != nil {
 				return err
 			}
 			ev, err := research.ResolveEvidence(s.evidences, args[0])
@@ -157,13 +169,16 @@ func newEvidenceApproveCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return s.commit(fmt.Sprintf("evidence approve %s: %s", ev.ID, ev.Summary), path)
+			return s.commit(fmt.Sprintf("evidence approve %s: %s", ev.ID, ev.Summary), reason, path)
 		},
 	}
+	registerReasonFlag(cmd, &reason)
+	return cmd
 }
 
 func newEvidenceUnlinkCmd() *cobra.Command {
-	return &cobra.Command{
+	var reason string
+	cmd := &cobra.Command{
 		Use:               "unlink <hypothesis> <evidence>",
 		Short:             "Unlink evidence from a hypothesis (the evidence itself is kept)",
 		Args:              cobra.ExactArgs(2),
@@ -171,6 +186,9 @@ func newEvidenceUnlinkCmd() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := openSession()
 			if err != nil {
+				return err
+			}
+			if err := s.requireReason(reason); err != nil {
 				return err
 			}
 			n, err := s.resolve(args[0])
@@ -190,13 +208,16 @@ func newEvidenceUnlinkCmd() *cobra.Command {
 				return err
 			}
 			// 紐づけ直すときに必要になるので、外した stance をコミットメッセージに残す。
-			return s.commit(fmt.Sprintf("evidence unlink %s (was %s) from %s", ev.ID, stance, n.ID), paths...)
+			return s.commit(fmt.Sprintf("evidence unlink %s (was %s) from %s", ev.ID, stance, n.ID), reason, paths...)
 		},
 	}
+	registerReasonFlag(cmd, &reason)
+	return cmd
 }
 
 func newEvidenceRmCmd() *cobra.Command {
-	return &cobra.Command{
+	var reason string
+	cmd := &cobra.Command{
 		Use:               "rm <evidence>",
 		Short:             "Remove evidence and its attached files (only when no hypothesis links to it)",
 		Args:              cobra.ExactArgs(1),
@@ -204,6 +225,9 @@ func newEvidenceRmCmd() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := openSession()
 			if err != nil {
+				return err
+			}
+			if err := s.requireReason(reason); err != nil {
 				return err
 			}
 			ev, err := research.ResolveEvidence(s.evidences, args[0])
@@ -221,9 +245,11 @@ func newEvidenceRmCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return s.commit(fmt.Sprintf("evidence rm %s: %s", ev.ID, ev.Summary), path)
+			return s.commit(fmt.Sprintf("evidence rm %s: %s", ev.ID, ev.Summary), reason, path)
 		},
 	}
+	registerReasonFlag(cmd, &reason)
+	return cmd
 }
 
 type jsonLinkedFrom struct {

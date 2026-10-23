@@ -30,7 +30,7 @@ func newInitCmd() *cobra.Command {
 				return err
 			}
 			s := &session{repo: repo}
-			if err := s.commit("init research directory", path); err != nil {
+			if err := s.commit("init research directory", "", path); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "initialized research directory in %s\n", repo.Root)
@@ -40,7 +40,8 @@ func newInitCmd() *cobra.Command {
 }
 
 func newAddCmd() *cobra.Command {
-	return &cobra.Command{
+	var reason string
+	cmd := &cobra.Command{
 		Use:               "add [parent] <title>",
 		Short:             "Add a hypothesis (as a root if parent is omitted)",
 		Args:              cobra.RangeArgs(1, 2),
@@ -48,6 +49,9 @@ func newAddCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openSession()
 			if err != nil {
+				return err
+			}
+			if err := s.requireReason(reason); err != nil {
 				return err
 			}
 			parentID, title := "", args[0]
@@ -66,16 +70,19 @@ func newAddCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := s.commit(fmt.Sprintf("add %s: %s", n.ID, n.Title), paths...); err != nil {
+			if err := s.commit(fmt.Sprintf("add %s: %s", n.ID, n.Title), reason, paths...); err != nil {
 				return err
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), n.ID)
 			return nil
 		},
 	}
+	registerReasonFlag(cmd, &reason)
+	return cmd
 }
 
 func newSetCmd() *cobra.Command {
+	var reason string
 	cmd := &cobra.Command{
 		Use:               "set <id>",
 		Short:             "Update attributes of a hypothesis",
@@ -84,6 +91,9 @@ func newSetCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openSession()
 			if err != nil {
+				return err
+			}
+			if err := s.requireReason(reason); err != nil {
 				return err
 			}
 			n, err := s.resolve(args[0])
@@ -113,7 +123,7 @@ func newSetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return s.commit(fmt.Sprintf("set %s: %s", n.ID, n.Title), path)
+			return s.commit(fmt.Sprintf("set %s: %s", n.ID, n.Title), reason, path)
 		},
 	}
 	f := cmd.Flags()
@@ -125,6 +135,7 @@ func newSetCmd() *cobra.Command {
 	f.String("condition", "", "condition of this case (parent's combine must be cases)")
 	f.String("axis", "", "the single criterion by which the children are split (empty to unset)")
 	f.String("weight", "", "impact on the parent relative to the siblings; normalized among siblings (empty to unset)")
+	registerReasonFlag(cmd, &reason)
 	_ = cmd.RegisterFlagCompletionFunc("status", fixedCompletion(research.Statuses))
 	_ = cmd.RegisterFlagCompletionFunc("combine", fixedCompletion(research.Combines))
 	return cmd
@@ -142,6 +153,7 @@ func fixedCompletion[T ~string](vs []T) func(*cobra.Command, []string, string) (
 
 func newMvCmd() *cobra.Command {
 	var toRoot bool
+	var reason string
 	cmd := &cobra.Command{
 		Use:               "mv <id> (<new-parent> | --root)",
 		Short:             "Move a hypothesis under another hypothesis, or to the root",
@@ -153,6 +165,9 @@ func newMvCmd() *cobra.Command {
 			}
 			s, err := openSession()
 			if err != nil {
+				return err
+			}
+			if err := s.requireReason(reason); err != nil {
 				return err
 			}
 			n, err := s.resolve(args[0])
@@ -175,15 +190,17 @@ func newMvCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return s.commit(fmt.Sprintf("mv %s to %s", n.ID, dest), paths...)
+			return s.commit(fmt.Sprintf("mv %s to %s", n.ID, dest), reason, paths...)
 		},
 	}
 	cmd.Flags().BoolVar(&toRoot, "root", false, "move to the root")
+	registerReasonFlag(cmd, &reason)
 	return cmd
 }
 
 func newRmCmd() *cobra.Command {
-	return &cobra.Command{
+	var reason string
+	cmd := &cobra.Command{
 		Use:               "rm <id>",
 		Short:             "Remove a hypothesis without children",
 		Args:              cobra.ExactArgs(1),
@@ -191,6 +208,9 @@ func newRmCmd() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, err := openSession()
 			if err != nil {
+				return err
+			}
+			if err := s.requireReason(reason); err != nil {
 				return err
 			}
 			n, err := s.resolve(args[0])
@@ -209,13 +229,16 @@ func newRmCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return s.commit(fmt.Sprintf("rm %s: %s", n.ID, n.Title), append(paths, removed)...)
+			return s.commit(fmt.Sprintf("rm %s: %s", n.ID, n.Title), reason, append(paths, removed)...)
 		},
 	}
+	registerReasonFlag(cmd, &reason)
+	return cmd
 }
 
 func newUndoCmd() *cobra.Command {
 	var force bool
+	var reason string
 	cmd := &cobra.Command{
 		Use:   "undo",
 		Short: "Undo the last commit by adding a commit that reverses it",
@@ -233,7 +256,10 @@ func newUndoCmd() *cobra.Command {
 			if force && research.IsAI(actor) {
 				return fmt.Errorf("--force can only be used by a human (actor is %s)", actor)
 			}
-			subject, err := gitutil.Undo(s.repo.Root, actor, force)
+			if err := s.requireReason(reason); err != nil {
+				return err
+			}
+			subject, err := gitutil.Undo(s.repo.Root, actor, reason, force)
 			if err != nil {
 				return err
 			}
@@ -242,5 +268,6 @@ func newUndoCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "undo the last commit even if it was not made by hyp")
+	registerReasonFlag(cmd, &reason)
 	return cmd
 }

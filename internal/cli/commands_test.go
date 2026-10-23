@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os/exec"
 	"strings"
 	"testing"
@@ -94,6 +95,20 @@ func TestReason(t *testing.T) {
 			if cmd.Flags().Lookup("reason") == nil {
 				t.Errorf("%v has no --reason", path)
 			}
+		}
+	})
+}
+
+func TestSet(t *testing.T) {
+	t.Run("今と同じ値を設定すると、変更がないことをエラーで返しコミットを作らない", func(t *testing.T) {
+		id := newResearchDir(t)
+		before := git(t, "rev-parse", "HEAD")
+		_, err := hyp("set", id, "--title", "全体仮説")
+		if !errors.Is(err, gitutil.ErrNoChanges) {
+			t.Errorf("err = %v", err)
+		}
+		if after := git(t, "rev-parse", "HEAD"); after != before {
+			t.Error("HEAD should not move")
 		}
 	})
 }

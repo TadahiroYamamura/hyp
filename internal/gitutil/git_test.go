@@ -1,6 +1,7 @@
 package gitutil
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,6 +89,21 @@ func TestCommit(t *testing.T) {
 		actor, _ := run(dir, "log", "-1", "--format=%(trailers:key=Hyp-Actor,valueonly)")
 		if actor != "ai:claude" {
 			t.Errorf("trailer = %q", actor)
+		}
+	})
+	t.Run("指定したファイルに変更がなければErrNoChangesを返し、コミットを作らない", func(t *testing.T) {
+		dir := newRepo(t)
+		write(t, dir, "x.yaml", "a")
+		if err := Commit(dir, "first", "", "human:tester", "x.yaml"); err != nil {
+			t.Fatal(err)
+		}
+		before := head(t, dir)
+		write(t, dir, "x.yaml", "a")
+		if err := Commit(dir, "same", "", "human:tester", "x.yaml"); !errors.Is(err, ErrNoChanges) {
+			t.Errorf("err = %v", err)
+		}
+		if head(t, dir) != before {
+			t.Error("HEAD should not move")
 		}
 	})
 	t.Run("本文が空ならコミットメッセージは件名とトレーラーだけになる", func(t *testing.T) {

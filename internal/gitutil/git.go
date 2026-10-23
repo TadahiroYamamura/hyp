@@ -2,6 +2,7 @@ package gitutil
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,9 @@ import (
 )
 
 const ActorEnv = "HYP_ACTOR"
+
+// ErrNoChanges は、コミットしようとしたファイルが直前のコミットから変わっていないことを表す。
+var ErrNoChanges = errors.New("nothing changed: the values are the same as before")
 
 func run(dir string, args ...string) (string, error) {
 	out, err := runRaw(dir, args...)
@@ -58,6 +62,13 @@ func Actor(dir string) (string, error) {
 func Commit(dir, subject, body, actor string, paths ...string) error {
 	addArgs := append([]string{"add", "-A", "--"}, paths...)
 	if _, err := run(dir, addArgs...); err != nil {
+		return err
+	}
+	// 変更がないまま git commit を呼ぶと、意味の分からない git のエラーになるため先に調べる。
+	diffArgs := append([]string{"diff", "--cached", "--quiet", "--"}, paths...)
+	if _, err := run(dir, diffArgs...); err == nil {
+		return ErrNoChanges
+	} else if exit := (*exec.ExitError)(nil); !errors.As(err, &exit) || exit.ExitCode() != 1 {
 		return err
 	}
 	commitArgs := []string{"commit", "-q", "-m", subject}

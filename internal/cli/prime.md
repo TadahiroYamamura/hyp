@@ -63,7 +63,7 @@ and approves evidence.
 
 ## Decomposing a hypothesis
 
-Use the `hyp-decompose` skill if it is available. Without it, at least:
+At least:
 
 1. Split by one explicit `axis`, so that the children are mutually exclusive and collectively
    exhaustive. Have someone other than the author check this before adding the children.
